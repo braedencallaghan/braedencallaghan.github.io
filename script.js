@@ -2,19 +2,21 @@ let canvas = document.getElementById("canvas");
 let context = canvas.getContext("2d");
 
 //Constants
-let canvasHeight = 300;
-let canvasWidth = 500;
+let canvasHeight = 400;
+let canvasWidth = 640;
+let start = false;
 
-let g = 9.8; //Gravity
-let k = .1; //Spring Constant
-let w_1 = 0; //Initial Angular Velocity of Pendulum 1
+let pix_per_m = canvasHeight/3.3
+let g = 9.8; //Gravity m/s^2
+let k = 1; //Spring Constant N/m
+let w_1 = 0; //Initial Angular Velocity of Pendulum 1 
 let w_2 = 0; //Initial Angular Velocity of Pendulum 1
-let m1 = .5; //Mass of bob 1
-let m2 =.5; //Mass of bob 2
-let angle1 = 45; //Angle of Pendulum 1
-let angle2 = 45; //Angle of Pendulum 2
-let length1 = 30; //Length of Pendulum 1
-let length2 = 30; //Length of Pendulum 2
+let m1 = 1; //Mass of bob 1: 1 - 5
+let m2 = 1; //Mass of bob 2: 1 - 5
+let angle1 = 30; //Angle of Pendulum 1 
+let angle2 = 0; //Angle of Pendulum 2
+let length1 = 1.5; //Length of Pendulum 1: .5 - 2.5
+let length2 = 1.5; //Length of Pendulum 2: .5 - 2.5
 
 canvas.width = canvasWidth;
 canvas.height = canvasHeight;
@@ -24,9 +26,10 @@ canvas.style="border:solid 1px;";
 let supportWidth = canvasWidth/1.5;
 let supportHeight = canvasHeight/10;
 
+//Support class to draw support
 class Support {
     draw(context) {
-        context.fillRect((canvasWidth-supportWidth)/2, 0, supportWidth, supportHeight); // Draws Top Support
+        context.fillRect((canvasWidth-supportWidth)/2, 0, supportWidth, supportHeight);
     }
 }
 
@@ -34,8 +37,8 @@ class Pendulum {
     constructor(xpos, length, mass, angle, direction, color) {
         this.xpos = (canvasWidth-supportWidth)/2 + xpos;
         this.ypos = supportHeight;
-        this.radius = 10 + mass*10;
-        this.length = length;
+        this.radius = 13 + mass*1.5;
+        this.length = length*pix_per_m;
         this.color = color;
         this.angle = angle * Math.PI/180;
         this.direction = direction
@@ -64,6 +67,7 @@ class Pendulum {
 
     }
 
+    //Updates the angle of the pendulum (doesn't draw as later I want to update the angle, then draw the spring, then draw the pendulum so the spring is behind)
     updateAngle(theta) {
         this.angle += theta*Math.PI/180;
     }
@@ -81,6 +85,7 @@ class Pendulum {
         return this.radius;
     }
 
+    //These functions find the very edge of the bob that is perpoendicular to the length of the pendulum plus the radius
     getBobXPos() {
         return this.xpos + this.direction*(this.radius*Math.cos(this.angle)) - (this.length+this.radius)*Math.sin(this.angle);
     }
@@ -92,7 +97,7 @@ class Pendulum {
 
 class Spring {
     constructor(xpos, ypos, length, radius1, radius2, angle) {
-        this.width = k * 100;
+        this.width = k * 10 + 5;
         this.xpos = xpos;
         this.ypos = ypos;
         this.length = length;
@@ -106,9 +111,12 @@ class Spring {
         
         context.fillStyle = "orange";
         
-        context.translate(this.xpos, this.ypos);
-        context.rotate(this.angle);
-        context.fillRect(0, -this.width/2, this.length, this.width); // Draws Spring
+        context.translate(this.xpos, this.ypos); //Sets origin of canvas to the top left corner of spring
+        context.rotate(this.angle); //Rotates the angle between bobs
+        context.fillRect(-2, -1, 14, 2)
+        context.fillRect(this.length-12, -1, 14, 2)
+
+        context.fillRect(10, -this.width/2, this.length-20, this.width); // Draws Spring
         
         context.restore();
     }
@@ -123,54 +131,64 @@ class Spring {
 }
 
 //Creation of Pendulum 1
-let p1 = new Pendulum(supportWidth/4, 150, m1, angle1, 1,"red");
+let p1 = new Pendulum(supportWidth/4, length1, m1, angle1, 1,"red");
 
 //Creation of Pendulum 2
-let p2 = new Pendulum(3*supportWidth/4, 150, m2, angle2, -1,"blue");
+let p2 = new Pendulum(3*supportWidth/4, length2, m2, angle2, -1,"blue");
 
 //Creation of Support
 let sup = new Support();
 sup.draw(context);
 
 //Creation of Spring
-let xS = p1.getBobXPos()-6;
+let xS = p1.getBobXPos(); //-6 as to offset the spring behind bob. It's a rectangle, so when it rotates with respect to the circular bob it shows corners without this
 let yS = p1.getBobYPos();
-let lengthS = Math.sqrt(Math.pow(p2.getBobXPos()-p1.getBobXPos(), 2) + Math.pow(p2.getBobYPos()-p1.getBobYPos(), 2))+12;
-let angleS = Math.asin((p2.getBobYPos()-p1.getBobYPos())/lengthS);
+let lengthS = Math.sqrt(Math.pow(p2.getBobXPos()-p1.getBobXPos(), 2) + Math.pow(p2.getBobYPos()-p1.getBobYPos(), 2)); //+12 to account for previous -6 and add 6 in the opposite direction
+let angleS = Math.asin((p2.getBobYPos()-p1.getBobYPos())/lengthS); //Finds angle between bendulum
 let spring = new Spring(xS, yS, lengthS, p1.getRadius(), p2.getRadius(), angleS);
-
 spring.draw(context);
+
 p1.draw(context);
 p2.draw(context);
 
-function animationLoop(timeStamp) {
-    
+//Starts and stops the animation
+function toggle() {
+    run = !run
 }
 
-
-function animate() {
+//Animates the canvas. This is essentially the Euler-Cromer method of numerically solving an ODE
+let oldTime = 0;
+function animate(timeStamp) {
+    let dt = (timeStamp-oldTime)/1000;
+    console.log(dt)
+    oldTime = timeStamp;
+    console.log(dt);
     context.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    sup.draw(context);
+    sup.draw(context); //Redraws top support everytime (doesn't change)
 
-    w_1 += ((-g/length1)*Math.sin(p1.getAngle()) - (k/m1)*(Math.sin(p1.getAngle()) - (length2/length1)*Math.sin(p2.getAngle())));
-    w_2 += ((-g/length2)*Math.sin(p2.getAngle()) - (k/m2)*(Math.sin(p2.getAngle()) - (length1/length2)*Math.sin(p1.getAngle())));
+    //Updates the angular velocity based on the current angles of the pendulum. 
+    w_1 += ((-g/length1)*Math.sin(p1.getAngle()) - (k/m1)*(Math.sin(p1.getAngle()) - (length2/length1)*Math.sin(p2.getAngle())))*Math.sqrt(dt);
+    w_2 += ((-g/length2)*Math.sin(p2.getAngle()) - (k/m2)*(Math.sin(p2.getAngle()) - (length1/length2)*Math.sin(p1.getAngle())))*Math.sqrt(dt);
 
-    p1.updateAngle(w_1);
-    p2.updateAngle(w_2);
+    //Updates the angle of the pendulum
+    p1.updateAngle(w_1*Math.sqrt(dt));
+    p2.updateAngle(w_2*Math.sqrt(dt));
 
-    xS = p1.getBobXPos()-6;
+    //Updates the coordinates, length, and angle of the spring
+    xS = p1.getBobXPos();
     yS = p1.getBobYPos();
-    lengthS = Math.sqrt(Math.pow(p2.getBobXPos()-p1.getBobXPos(), 2) + Math.pow(p2.getBobYPos()-p1.getBobYPos(), 2))+12;
+    lengthS = Math.sqrt(Math.  pow(p2.getBobXPos()-p1.getBobXPos(), 2) + Math.pow(p2.getBobYPos()-p1.getBobYPos(), 2));
     angleS = Math.asin((p2.getBobYPos()-p1.getBobYPos())/lengthS);
-    spring = new Spring(xS, yS, lengthS, p1.getRadius(), p2.getRadius(), angleS);
 
+    //Redraws the spring with updated coordinates, size, and angle
     spring.update(xS, yS, lengthS, angleS);
+
+    //Redraws both pendulums
     p1.update();
     p2.update();
     
     window.requestAnimationFrame(animate);
 }
 
-animate();
-
+animate(oldTime);
